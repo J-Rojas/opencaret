@@ -1,6 +1,7 @@
 #!/usr/bin/python
 import cantools
 import oscc
+import opendbc
 import math
 from opencaret_msgs.msg import CanMessage
 from std_msgs.msg import Float32, Bool
@@ -17,9 +18,8 @@ KIA_SOUL_STEERING_RATIO = 15.7
 ACC_FILTER_FACTOR = 0.95
 STEER_ACC_FILTER_FACTOR = 0
 
-print(oscc.__path__)
-
 OSCC_DBC_PATH = os.path.join(oscc.__path__[1],"api","include","can_protocols")
+OPEN_DBC_PATH = os.path.join(opendbc.__path__[1])
 
 class KiaSoulDriver():
 
@@ -28,7 +28,7 @@ class KiaSoulDriver():
         self.last_velocity = None
         self.last_velocity_ts = None
         self.filtered_accel = 0
-        self.kia_db = cantools.db.load_file(os.path.join(OSCC_DBC_PATH, 'kia_soul_ev.dbc'))
+        self.kia_db = cantools.db.load_file(os.path.join(OPEN_DBC_PATH, 'hyundai_2015_ccan.dbc'))
         self.oscc_db = cantools.db.load_file(os.path.join(OSCC_DBC_PATH, 'oscc.dbc'))
         self.can_bus = CanTransceiver(CanTransceiver.CONTROL_INTERFACE_PARAM, delegate=self)
         self.last_steering_angle = None
@@ -128,13 +128,18 @@ class KiaSoulDriver():
         if not self.enabled:
             return
 
+        print('on_steering_cmd', msg.data)
+
+        steering_angle = struct.unpack('<I',struct.pack("<f", msg.data))[0]
         steering_oscc_msg = self.oscc_db.get_message_by_name("STEERING_COMMAND")
-        self.can_bus.send_message(id=0x84,
+        self.can_bus.send_message(id=0x82,
                                 data=steering_oscc_msg.encode({
                                     'steering_command_magic': OSCC_MAGIC_NUMBER,
-                                    'steering_command_torque_request': msg.data,
+                                    'steering_command_mode': OSCC_STEERING_PID_COMMAND_MODE,
+                                    'steering_command_value': steering_angle,
                                     'steering_command_reserved': 0
                                 }))
+
 
     def on_brake_cmd(self, msg):
         if not self.enabled:
